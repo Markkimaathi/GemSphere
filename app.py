@@ -9,8 +9,6 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
-import requests
-from bs4 import BeautifulSoup
 
 load_dotenv()
 os.getenv("GOOGLE_API_KEY")
@@ -24,17 +22,6 @@ def get_pdf_text(pdf_docs):
         for page in pdf_reader.pages:
             text += page.extract_text()
     return text
-
-# Fetch webpage content from the URL
-def get_url_text(url):
-    try:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        text = soup.get_text()
-        return text
-    except Exception as e:
-        st.error(f"Error fetching URL content: {e}")
-        return ""
 
 # split text into chunks
 def get_text_chunks(text):
@@ -71,7 +58,7 @@ def get_conversational_chain():
 
 def clear_chat_history():
     st.session_state.messages = [
-        {"role": "assistant", "content": "upload some PDFs or enter a URL and ask me a question"}]
+        {"role": "assistant", "content": "upload some PDFs and ask me a question"}]
 
 def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(
@@ -95,33 +82,18 @@ def highlight_keywords(response, keywords):
 
 def main():
     st.set_page_config(
-        page_title="Gemini PDF/URL Chatbot",
+        page_title="Gemini PDF Chatbot",
         page_icon="🤖",
         layout="wide"
     )
 
-    # Sidebar for uploading PDF files or entering a URL
+    # Sidebar for uploading PDF files
     with st.sidebar:
         st.title("Menu:")
-        
-        # Dark Mode Toggle
-        dark_mode = st.checkbox("Dark Mode")
-        if dark_mode:
-            st.markdown("""
-                <style>
-                body {
-                    background-color: #1E1E1E;
-                    color: white;
-                }
-                </style>
-                """, unsafe_allow_html=True)
         
         # PDF uploader
         pdf_docs = st.file_uploader(
             "Upload your PDF Files", accept_multiple_files=True)
-
-        # URL input
-        url_input = st.text_input("Or enter a URL:")
 
         # Preview section
         if pdf_docs:
@@ -130,19 +102,13 @@ def main():
                 pdf_reader = PdfReader(pdf)
                 first_page = pdf_reader.pages[0]
                 st.write(first_page.extract_text()[:1000])  # Preview first 1000 characters
-        elif url_input:
-            raw_text = get_url_text(url_input)
-            st.write("Preview of URL content:")
-            st.write(raw_text[:1000])  # Preview first 1000 characters
 
         if st.button("Submit & Process"):
             with st.spinner("Processing..."):
                 if pdf_docs:
                     raw_text = get_pdf_text(pdf_docs)
-                elif url_input:
-                    raw_text = get_url_text(url_input)
                 else:
-                    st.error("Please upload a PDF or enter a URL.")
+                    st.error("Please upload a PDF.")
                     return
 
                 text_chunks = get_text_chunks(raw_text)
@@ -150,13 +116,13 @@ def main():
                 st.success("Done")
 
     # Main content area for displaying chat messages
-    st.title("Chat with PDF files or Webpages using Gemini🤖")
-    st.write("Welcome to the chat! Upload files or enter URLs to start.")
+    st.title("Chat with PDF files using Gemini🤖")
+    st.write("Welcome to the chat! Upload files to start.")
 
     # Progress bar for processing
     if "messages" not in st.session_state.keys():
         st.session_state.messages = [
-            {"role": "assistant", "content": "upload some PDFs or enter a URL and ask me a question"}]
+            {"role": "assistant", "content": "upload some PDFs and ask me a question"}]
 
     for message in st.session_state.messages:
         with st.expander("Chat History", expanded=True):
