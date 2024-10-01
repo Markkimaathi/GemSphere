@@ -88,21 +88,52 @@ def user_input(user_question):
     print(response)
     return response
 
+def highlight_keywords(response, keywords):
+    for keyword in keywords:
+        response = response.replace(keyword, f"<mark>{keyword}</mark>")
+    st.markdown(response, unsafe_allow_html=True)
+
 def main():
     st.set_page_config(
         page_title="Gemini PDF/URL Chatbot",
-        page_icon="🤖"
+        page_icon="🤖",
+        layout="wide"
     )
 
     # Sidebar for uploading PDF files or entering a URL
     with st.sidebar:
         st.title("Menu:")
+        
+        # Dark Mode Toggle
+        dark_mode = st.checkbox("Dark Mode")
+        if dark_mode:
+            st.markdown("""
+                <style>
+                body {
+                    background-color: #1E1E1E;
+                    color: white;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+        
         # PDF uploader
         pdf_docs = st.file_uploader(
             "Upload your PDF Files", accept_multiple_files=True)
 
         # URL input
         url_input = st.text_input("Or enter a URL:")
+
+        # Preview section
+        if pdf_docs:
+            for pdf in pdf_docs:
+                st.write(f"Preview of {pdf.name}:")
+                pdf_reader = PdfReader(pdf)
+                first_page = pdf_reader.pages[0]
+                st.write(first_page.extract_text()[:1000])  # Preview first 1000 characters
+        elif url_input:
+            raw_text = get_url_text(url_input)
+            st.write("Preview of URL content:")
+            st.write(raw_text[:1000])  # Preview first 1000 characters
 
         if st.button("Submit & Process"):
             with st.spinner("Processing..."):
@@ -120,17 +151,19 @@ def main():
 
     # Main content area for displaying chat messages
     st.title("Chat with PDF files or Webpages using Gemini🤖")
-    st.write("Welcome to the chat!")
-    st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
+    st.write("Welcome to the chat! Upload files or enter URLs to start.")
 
-    # Chat input
+    # Progress bar for processing
     if "messages" not in st.session_state.keys():
         st.session_state.messages = [
             {"role": "assistant", "content": "upload some PDFs or enter a URL and ask me a question"}]
 
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+        with st.expander("Chat History", expanded=True):
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+
+    st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
 
     if prompt := st.chat_input():
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -148,9 +181,14 @@ def main():
                     full_response += item
                     placeholder.markdown(full_response)
                 placeholder.markdown(full_response)
+
         if response is not None:
             message = {"role": "assistant", "content": full_response}
             st.session_state.messages.append(message)
+
+        # Highlight important keywords
+        keywords = ["important", "highlight", "key"]
+        highlight_keywords(response['output_text'], keywords)
 
 
 if __name__ == "__main__":
