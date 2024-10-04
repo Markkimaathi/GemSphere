@@ -83,7 +83,7 @@ def main():
                 st.write(f"Preview of {pdf.name}:")
                 pdf_reader = PdfReader(pdf)
                 first_page = pdf_reader.pages[0]
-                st.write(first_page.extract_text()[:1000])
+                st.write(first_page.extract_text()[:700])
 
         if st.button("Process PDF(s)"):
             if pdf_docs:
