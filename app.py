@@ -9,13 +9,7 @@ from langchain.prompts import PromptTemplate
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
-import speech_recognition as sr
-from gtts import gTTS
-import io
-from pydub import AudioSegment
-from pydub.playback import play
 
-# Load environment variables
 load_dotenv()
 os.getenv("GOOGLE_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
@@ -66,31 +60,6 @@ def user_input(user_question):
     chain = get_conversational_chain()
     return chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
 
-# Convert text to speech using gTTS and play it
-def speak_text(text):
-    tts = gTTS(text)
-    audio_buffer = io.BytesIO()
-    tts.write_to_fp(audio_buffer)
-    audio_buffer.seek(0)
-    audio = AudioSegment.from_file(audio_buffer, format="mp3")
-    play(audio)
-
-# Function to capture voice input from user
-def capture_voice_input():
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.write("Listening for your question...")
-        audio = recognizer.listen(source)
-        try:
-            user_input_text = recognizer.recognize_google(audio)
-            st.write(f"Recognized: {user_input_text}")
-            return user_input_text
-        except sr.UnknownValueError:
-            st.write("Sorry, I could not understand your voice.")
-        except sr.RequestError as e:
-            st.write(f"Could not request results; {e}")
-    return None
-
 # Main function for the Streamlit app
 def main():
     # Set up page configuration
@@ -139,38 +108,19 @@ def main():
         with st.chat_message(role):
             st.write(content)
 
-    # Option for voice input
-    if st.button("Ask a question with voice"):
-        user_question = capture_voice_input()
-        if user_question:  # Check if voice input was successfully captured
-            st.session_state.messages.append({"role": "user", "content": user_question})
-            with st.chat_message("user"):
-                st.write(user_question)
-
-            # Process the captured question
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    response = user_input(user_question)
-                    full_response = "".join(response['output_text'])
-                    st.write(full_response)
-                    speak_text(full_response)  # Convert the bot's response to speech
-                    st.session_state.messages.append({"role": "assistant", "content": full_response})
-        else:
-            st.write("Sorry, I could not capture your voice input. Please try again.")
-
     # Chat input from user
     if prompt := st.chat_input():
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
 
-        # Bot response to the user
+    # Bot response to the user
+    if st.session_state.messages[-1]["role"] != "assistant":
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 response = user_input(prompt)
                 full_response = "".join(response['output_text'])
                 st.write(full_response)
-                speak_text(full_response)  # Convert the bot's response to speech
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     # Button to clear chat history
