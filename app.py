@@ -10,7 +10,6 @@ import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 import tempfile
-import shutil
 
 # Load environment variables
 load_dotenv()
@@ -51,7 +50,8 @@ def load_or_create_vector_store(chunks):
 def get_conversational_chain():
     prompt_template = """
     Answer the question as detailed as possible from the provided context. If the answer is not available in the provided
-    context, respond with "The answer is not available in the context."
+    context, respond with "The answer is not available in the context." Adhere to specific instructions provided in the
+    question, but allow context-driven follow-ups without repetition of keywords.
 
     Context:
     {context}
@@ -71,7 +71,8 @@ def user_input(user_question):
     vector_store = FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
     docs = vector_store.similarity_search(user_question)
     chain = get_conversational_chain()
-    return chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
+    response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
+    return response["output_text"]
 
 def search_pdf(keyword, text):
     results = []
@@ -157,9 +158,8 @@ def main():
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     response = user_input(prompt)
-                    full_response = "".join(response['output_text'])
-                    st.write(full_response)
-                    st.session_state.messages.append({"role": "assistant", "content": full_response})
+                    st.write(response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
 
 # Run the app
 if __name__ == "__main__":
