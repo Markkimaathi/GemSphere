@@ -134,7 +134,7 @@ def main():
                 st.error("Please process a PDF first.")
 
     # Chat area
-    st.title("🤖 Chat with your PDFs")
+    st.title("🤖Chat with your Portable Document Formats")
 
     # Initialize chat history
     if "messages" not in st.session_state:
