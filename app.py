@@ -9,18 +9,26 @@ from langchain.prompts import PromptTemplate
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
+import tempfile
+import shutil
 
 # Load environment variables
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+# Cache directory for vector store
+CACHE_DIR = tempfile.gettempdir()
+VECTOR_STORE_PATH = os.path.join(CACHE_DIR, "faiss_index")
 
 # Functions
 def get_pdf_text(pdf_docs):
     text = ""
     for pdf in pdf_docs:
         pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
+        for page_number, page in enumerate(pdf_reader.pages, start=1):
+            page_text = page.extract_text()
+            if page_text:
+                text += f"\n[Page {page_number}]\n{page_text}"
     return text
 
 def get_text_chunks(text):
@@ -30,14 +38,25 @@ def get_text_chunks(text):
 def get_vector_store(chunks):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")  # type: ignore
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
-    vector_store.save_local("faiss_index")
+    vector_store.save_local(VECTOR_STORE_PATH)
+
+def load_or_create_vector_store(chunks):
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")  # type: ignore
+    if os.path.exists(VECTOR_STORE_PATH):
+        return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
+    else:
+        get_vector_store(chunks)
+        return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
 
 def get_conversational_chain():
     prompt_template = """
     Answer the question as detailed as possible from the provided context. If the answer is not available in the provided
-    context, respond with "The answer is not available in the context."\n\n
-    Context:\n {context}\n
-    Question:\n {question}\n
+    context, respond with "The answer is not available in the context."
+
+    Context:
+    {context}
+    Question:
+    {question}
     Answer:
     """
     model = ChatGoogleGenerativeAI(model="gemini-pro", client=genai, temperature=0.3)
@@ -49,16 +68,17 @@ def clear_chat_history():
 
 def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")  # type: ignore
-    new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    docs = new_db.similarity_search(user_question)
+    vector_store = FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
+    docs = vector_store.similarity_search(user_question)
     chain = get_conversational_chain()
     return chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
 
-def summarize_text(text):
-    return text[:500] + "..." if len(text) > 500 else text
-
 def search_pdf(keyword, text):
-    return [line for line in text.split("\n") if keyword.lower() in line.lower()]
+    results = []
+    for line in text.split("\n"):
+        if keyword.lower() in line.lower():
+            results.append(line)
+    return results
 
 # Main App
 def main():
@@ -69,24 +89,27 @@ def main():
     with st.sidebar:
         st.title("📁 Gemini PDF Chatbot")
         st.write("Explore PDFs with ease. Upload, process, and chat with your documents.")
-        
+
         st.header("1️⃣ Upload PDF")
         pdf_docs = st.file_uploader("Upload PDF Files", accept_multiple_files=True)
 
         if pdf_docs:
             st.subheader("PDF Previews:")
             for pdf in pdf_docs:
-                st.write(f"**Preview of {pdf.name}:**")
-                pdf_reader = PdfReader(pdf)
-                first_page = pdf_reader.pages[0]
-                st.write(first_page.extract_text()[:700])
+                try:
+                    st.write(f"**Preview of {pdf.name}:**")
+                    pdf_reader = PdfReader(pdf)
+                    first_page = pdf_reader.pages[0]
+                    st.write(first_page.extract_text()[:700])
+                except Exception as e:
+                    st.error(f"Error processing {pdf.name}: {e}")
 
         if st.button("Process PDF(s)"):
             if pdf_docs:
                 with st.spinner("Processing PDF(s)..."):
                     raw_text = get_pdf_text(pdf_docs)
                     text_chunks = get_text_chunks(raw_text)
-                    get_vector_store(text_chunks)
+                    load_or_create_vector_store(text_chunks)
                     st.success("Processing complete!")
                     st.session_state.raw_text = raw_text
             else:
@@ -95,13 +118,19 @@ def main():
         st.header("2️⃣ Tools")
         if st.button("Clear Chat History"):
             clear_chat_history()
-        if st.button("Summarize PDF"):
+
+        keyword = st.text_input("Search PDF for keyword")
+        if st.button("Search"):
             if "raw_text" in st.session_state:
-                st.success("Summary:")
-                st.write(summarize_text(st.session_state.raw_text))
+                results = search_pdf(keyword, st.session_state.raw_text)
+                if results:
+                    st.success("Search Results:")
+                    for result in results:
+                        st.write(result)
+                else:
+                    st.warning("No matches found.")
             else:
                 st.error("Please process a PDF first.")
-
 
     # Chat area
     st.title("🤖 Chat with your PDFs")
