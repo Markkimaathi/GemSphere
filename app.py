@@ -101,7 +101,7 @@ def main():
                     st.write(f"**Preview of {pdf.name}:**")
                     pdf_reader = PdfReader(pdf)
                     first_page = pdf_reader.pages[0]
-                    st.write(first_page.extract_text()[:700])
+                    st.write(first_page.extract_text()[:1000])
                 except Exception as e:
                     st.error(f"Error processing {pdf.name}: {e}")
 
