@@ -47,20 +47,16 @@ def load_or_create_vector_store(chunks):
         get_vector_store(chunks)
         return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
 
-def get_conversational_chain(summary_words=None):
-    summary_instruction = (
-        f"Summarize your answer in approximately {summary_words} words. " 
-        if summary_words else ""
-    )
-    prompt_template = f"""
+def get_conversational_chain():
+    prompt_template = """
     Answer the question as detailed as possible from the provided context. If the answer is not available in the provided
-    context, respond with "The answer is not available in the context." {summary_instruction}
-    Adhere to specific instructions provided in the question, but allow context-driven follow-ups without repetition of keywords.
+    context, respond with "The answer is not available in the context." Adhere to specific instructions provided in the
+    question, but allow context-driven follow-ups without repetition of keywords.
 
     Context:
-    {{context}}
+    {context}
     Question:
-    {{question}}
+    {question}
     Answer:
     """
     model = ChatGoogleGenerativeAI(model="gemini-pro", client=genai, temperature=0.3)
@@ -70,11 +66,11 @@ def get_conversational_chain(summary_words=None):
 def clear_chat_history():
     st.session_state.messages = [{"role": "assistant", "content": "Welcome! Upload a PDF and ask me anything about it."}]
 
-def user_input(user_question, summary_words=None):
+def user_input(user_question):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")  # type: ignore
     vector_store = FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
     docs = vector_store.similarity_search(user_question)
-    chain = get_conversational_chain(summary_words)
+    chain = get_conversational_chain()
     response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
     return response["output_text"]
 
@@ -152,13 +148,7 @@ def main():
             st.write(content)
 
     # User input
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        prompt = st.chat_input(placeholder="Ask your question...")
-    with col2:
-        summary_words = st.number_input("Word limit", min_value=5, max_value=100, step=5, value=25)
-
-    if prompt:
+    if prompt := st.chat_input(placeholder="Ask your question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
@@ -167,7 +157,7 @@ def main():
         if st.session_state.messages[-1]["role"] != "assistant":
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
-                    response = user_input(prompt, summary_words=summary_words)
+                    response = user_input(prompt)
                     st.write(response)
                     st.session_state.messages.append({"role": "assistant", "content": response})
 
