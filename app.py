@@ -21,25 +21,33 @@ VECTOR_STORE_PATH = os.path.join(CACHE_DIR, "faiss_index")
 
 # Functions
 def get_pdf_text(pdf_docs):
+    """Extract text from uploaded PDF files."""
     text = ""
     for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
-        for page_number, page in enumerate(pdf_reader.pages, start=1):
-            page_text = page.extract_text()
-            if page_text:
-                text += f"\n[Page {page_number}]\n{page_text}"
+        try:
+            pdf_reader = PdfReader(pdf)
+            for page_number in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_number]
+                page_text = page.extract_text()
+                if page_text:
+                    text += f"\n[Page {page_number + 1}]\n{page_text}"
+        except Exception as e:
+            st.error(f"Error reading {pdf.name}: {e}")
     return text
 
 def get_text_chunks(text):
+    """Split text into manageable chunks."""
     splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
     return splitter.split_text(text)
 
 def get_vector_store(chunks):
+    """Create a vector store from text chunks."""
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")  # type: ignore
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
     vector_store.save_local(VECTOR_STORE_PATH)
 
 def load_or_create_vector_store(chunks):
+    """Load existing vector store or create a new one."""
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")  # type: ignore
     if os.path.exists(VECTOR_STORE_PATH):
         return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
@@ -48,6 +56,7 @@ def load_or_create_vector_store(chunks):
         return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
 
 def get_conversational_chain():
+    """Set up a conversational chain for question answering."""
     prompt_template = """
     Answer the question as detailed as possible from the provided context. If the answer is not available in the provided
     context, respond with "The answer is not available in the context." Adhere to specific instructions provided in the
@@ -64,9 +73,11 @@ def get_conversational_chain():
     return load_qa_chain(llm=model, chain_type="stuff", prompt=prompt)
 
 def clear_chat_history():
+    """Clear chat history."""
     st.session_state.messages = [{"role": "assistant", "content": "Welcome! Upload a PDF and ask me anything about it."}]
 
 def user_input(user_question):
+    """Process user input and return the chatbot's response."""
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")  # type: ignore
     vector_store = FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
     docs = vector_store.similarity_search(user_question)
@@ -75,6 +86,7 @@ def user_input(user_question):
     return response["output_text"]
 
 def search_pdf(keyword, text):
+    """Search for a keyword in the processed text."""
     results = []
     for line in text.split("\n"):
         if keyword.lower() in line.lower():
@@ -83,7 +95,7 @@ def search_pdf(keyword, text):
 
 # Main App
 def main():
-    # Page configuration
+    """Streamlit App for Gemini PDF Chatbot."""
     st.set_page_config(page_title="Gemini PDF Chatbot", page_icon="🤖", layout="wide")
 
     # Sidebar
@@ -134,7 +146,7 @@ def main():
                 st.error("Please process a PDF first.")
 
     # Chat area
-    st.title("🤖Chat with your Portable Document Formats")
+    st.title("🤖 Chat with your Portable Document Formats")
 
     # Initialize chat history
     if "messages" not in st.session_state:
