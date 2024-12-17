@@ -46,29 +46,23 @@ def get_vector_store(chunks):
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
     vector_store.save_local(VECTOR_STORE_PATH)
 
-def load_or_create_vector_store(chunks):
+def load_or_create_vector_store(chunks, force_reload=False):
     """Load existing vector store or create a new one."""
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")  # type: ignore
-    if os.path.exists(VECTOR_STORE_PATH):
-        return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
-    else:
-        get_vector_store(chunks)
-        return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
+    if force_reload or not os.path.exists(VECTOR_STORE_PATH):
+        get_vector_store(chunks)  # Create a new vector store
+    return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
 
 def get_conversational_chain():
     """Set up a conversational chain for question answering."""
     prompt_template = """
-    Answer the question as detailed as possible from the provided context. If the answer is not available in the provided
-    context, respond with "The answer is not available in the context." Adhere to specific instructions provided in the
-    question, but allow context-driven follow-ups without repetition of keywords.
-
-    Context:
-    {context}
-    Question:
-    {question}
-    Answer:
+     Answer the question clearly and precisely. If the context is not provided, return the result as
+        'Sorry I don't know the answer', don't provide the wrong answer.
+        Context:\n {context}?\n
+        Question:\n{question}\n
+        Answer:
     """
-    model = ChatGoogleGenerativeAI(model="gemini-pro", client=genai, temperature=0.3)
+    model = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", client=genai, temperature=1.0)
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     return load_qa_chain(llm=model, chain_type="stuff", prompt=prompt)
 
@@ -118,13 +112,15 @@ def main():
                     st.error(f"Error processing {pdf.name}: {e}")
 
         if st.button("Process PDF(s)"):
+
             if pdf_docs:
                 with st.spinner("Processing PDF(s)..."):
                     raw_text = get_pdf_text(pdf_docs)
                     text_chunks = get_text_chunks(raw_text)
-                    load_or_create_vector_store(text_chunks)
+                    # Force reload to clear previous vector store and use the new PDF text
+                    load_or_create_vector_store(text_chunks, force_reload=True)
                     st.success("Processing complete!")
-                    st.session_state.raw_text = raw_text
+                    st.session_state.raw_text = raw_text  # Update the raw_text in session state
             else:
                 st.error("Please upload at least one PDF to proceed.")
 
