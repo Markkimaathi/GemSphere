@@ -94,7 +94,7 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.title("📁 Gemini PDF Chatbot")
+        st.title("📁 PDF Chatbot System")
         st.write("Explore PDFs with ease. Upload, process, and chat with your documents.")
 
         st.header("1️⃣ Upload PDF")
@@ -142,7 +142,7 @@ def main():
                 st.error("Please process a PDF first.")
 
     # Chat area
-    st.title("🤖 Chat with your Portable Document Formats")
+    st.title("Chat with your Portable Document Formats")
 
     # Initialize chat history
     if "messages" not in st.session_state:
